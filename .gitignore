@@ -1,0 +1,10 @@
+# Entorno Virtual de Python
+/venv/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+
+# Archivos temporales generados por el script
+temp_audio.mp3
+transcripcion.txtgit init
