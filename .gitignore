@@ -1,5 +1,5 @@
 # Entorno Virtual de Python
-/venv/
+/venv1/
 
 # Archivos de caché de Python
 __pycache__/
@@ -7,4 +7,5 @@ __pycache__/
 
 # Archivos temporales generados por el script
 temp_audio.mp3
-transcripcion.txtgit init
+*.mp4
+transcripcion.txt
