@@ -1,82 +1,115 @@
 import os
-import time  # <--- 1. Importamos la librería time
+import time
 import whisper
 from moviepy.editor import VideoFileClip
 
-def transcribir_video_local(ruta_video: str): # <--- 2. Modificamos lo que devuelve la función
+def transcribir_archivo_local(ruta_archivo: str):
     """
-    Extrae el audio de un video, lo transcribe a texto usando Whisper
-    y devuelve la transcripción junto con los tiempos de cada fase.
+    Identifica si el archivo es video o audio, lo procesa, lo transcribe
+    y devuelve el resultado y los tiempos.
     """
-    print(f"Cargando video desde: {ruta_video}")
-    if not os.path.exists(ruta_video):
-        return "Error: El archivo de video no fue encontrado.", {}
+    print(f"▶️ Procesando archivo: {ruta_archivo}")
+    if not os.path.exists(ruta_archivo):
+        return "Error: El archivo no fue encontrado.", {}
 
+    # Definir extensiones conocidas
+    EXTENSIONES_VIDEO = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+    EXTENSIONES_AUDIO = ['.mp3', '.wav', '.m4a', '.flac'] # Incluimos MP3 y otros formatos comunes
+    
     tiempos = {}
-    ruta_audio_temporal = "temp_audio.mp3"
+    nombre_base, extension = os.path.splitext(ruta_archivo)
+    extension = extension.lower()
+    
+    ruta_audio_para_whisper = None
+    es_video = False
+
+    # --- Fase 1: Preparación del Audio ---
+    if extension in EXTENSIONES_VIDEO:
+        es_video = True
+        print("📹 Archivo de video detectado.")
+        ruta_audio_para_whisper = "temp_audio.mp3"
+        
+        t_inicio_extraccion = time.time()
+        try:
+            video = VideoFileClip(ruta_archivo)
+            print("🎧 Extrayendo audio del video...")
+            video.audio.write_audiofile(ruta_audio_para_whisper, codec='mp3', logger=None)
+            video.close()
+            t_fin_extraccion = time.time()
+            tiempos['extraccion'] = t_fin_extraccion - t_inicio_extraccion
+            print("✅ Audio extraído con éxito.")
+        except Exception as e:
+            return f"❌ Error al extraer el audio: {e}", {}
+
+    elif extension in EXTENSIONES_AUDIO:
+        print("🎵 Archivo de audio detectado. Se usará directamente.")
+        ruta_audio_para_whisper = ruta_archivo
+        tiempos['extraccion'] = 0 # No hay extracción, tiempo es 0
+    else:
+        return f"❌ Error: Tipo de archivo '{extension}' no soportado.", {}
 
     try:
-        # --- Fase 1: Extracción de Audio ---
-        t_inicio_extraccion = time.time()
-        video = VideoFileClip(ruta_video)
-        print("Extrayendo audio del video...")
-        video.audio.write_audiofile(ruta_audio_temporal, codec='mp3', logger=None) # logger=None para una salida más limpia
-        video.close()
-        t_fin_extraccion = time.time()
-        tiempos['extraccion'] = t_fin_extraccion - t_inicio_extraccion
-        print("Audio extraído con éxito.")
-
         # --- Fase 2: Carga del Modelo ---
         t_inicio_carga = time.time()
-        print("Cargando modelo de Whisper...")
-        model = whisper.load_model("base") 
+        print("🧠 Cargando modelo de Whisper...")
+        # Puedes cambiar 'base' por 'small' o 'medium' si tu máquina es potente
+        model = whisper.load_model("base")
         t_fin_carga = time.time()
         tiempos['carga_modelo'] = t_fin_carga - t_inicio_carga
         
         # --- Fase 3: Transcripción ---
         t_inicio_transcripcion = time.time()
-        print("Iniciando transcripción... Este proceso puede tardar varios minutos.")
-        resultado = model.transcribe(ruta_audio_temporal, language='en')
+        print("🎤 Iniciando transcripción...")
+        resultado = model.transcribe(ruta_audio_para_whisper, language='en', verbose=None) 
         transcripcion = resultado['text']
         t_fin_transcripcion = time.time()
         tiempos['transcripcion'] = t_fin_transcripcion - t_inicio_transcripcion
-        print("Transcripción completada.")
+        print("\n✅ Transcripción completada.")
 
     except Exception as e:
-        return f"Ocurrió un error: {e}", {}
+        return f"❌ Ocurrió un error durante la transcripción: {e}", {}
         
     finally:
-        if os.path.exists(ruta_audio_temporal):
-            os.remove(ruta_audio_temporal)
-            print("Archivo de audio temporal eliminado.")
+        # Solo eliminamos el archivo de audio si fue un video el que lo generó
+        if es_video and os.path.exists("temp_audio.mp3"):
+            os.remove("temp_audio.mp3")
+            print("🗑️ Archivo de audio temporal eliminado.")
 
-    return transcripcion, tiempos # <--- 3. Devolvemos el texto y el diccionario de tiempos
+    return transcripcion, tiempos
 
-# --- INICIO DEL SCRIPT ---
+# --- INICIO DE LA EJECUCIÓN DEL SCRIPT ---
 if __name__ == "__main__":
-    ruta_del_video = "mi_video.mp4" 
-
-    # 4. Capturamos los dos valores que devuelve la función
-    texto_transcrito, tiempos_proceso = transcribir_video_local(ruta_del_video)
+    
+    # --- IMPORTANTE: CAMBIA ESTA LÍNEA POR LA RUTA DE TU ARCHIVO ---
+    # Puede ser un video o un archivo de audio MP3
+    ruta_del_archivo_a_transcribir = "mi_video_o_audio.mp4" 
+    
+    # Llamamos a la función con el archivo
+    texto_transcrito, tiempos_proceso = transcribir_archivo_local(ruta_del_archivo_a_transcribir)
 
     if texto_transcrito and not texto_transcrito.startswith("Error:"):
-        print("\n--- TRANSCRIPCIÓN ---")
+        print("\n--- 📝 TRANSCRIPCIÓN ---")
         print(texto_transcrito)
         
-        nombre_archivo_salida = "transcripcion.txt"
+        # --- Lógica para el nombre de archivo dinámico ---
+        nombre_base_input = os.path.splitext(os.path.basename(ruta_del_archivo_a_transcribir))[0]
+        nombre_archivo_salida = f"transcripción_{nombre_base_input}.txt"
+        
         with open(nombre_archivo_salida, "w", encoding="utf-8") as f:
             f.write(texto_transcrito)
-        print(f"\nTranscripción guardada en el archivo: {nombre_archivo_salida}")
+        print(f"\n💾 Transcripción guardada en el archivo: {nombre_archivo_salida}")
 
-        # 5. Mostramos el resumen de tiempos
+        # Mostramos el resumen de tiempos
         if tiempos_proceso:
             tiempo_total = sum(tiempos_proceso.values())
-            print("\n--- TIEMPOS DE PROCESAMIENTO ---")
-            print(f"Extracción de audio: {tiempos_proceso.get('extraccion', 0):.2f} segundos.")
+            print("\n--- ⏱️ TIEMPOS DE PROCESAMIENTO ---")
+            if tiempos_proceso.get('extraccion', 0) > 0:
+                 print(f"Extracción de audio: {tiempos_proceso.get('extraccion', 0):.2f} segundos.")
             print(f"Carga del modelo IA: {tiempos_proceso.get('carga_modelo', 0):.2f} segundos.")
             print(f"Transcripción del audio: {tiempos_proceso.get('transcripcion', 0):.2f} segundos.")
             print("---------------------------------")
             print(f"Tiempo Total: {tiempo_total:.2f} segundos.")
 
     else:
-        print(texto_transcrito)
+        # Imprime el mensaje de error si algo falló
+        print(f"\n{texto_transcrito}")
