@@ -60,7 +60,8 @@ def transcribir_archivo_local(ruta_archivo: str):
         # --- Fase 3: Transcripción ---
         t_inicio_transcripcion = time.time()
         print("🎤 Iniciando transcripción...")
-        resultado = model.transcribe(ruta_audio_para_whisper, language='en', verbose=None) 
+        resultado = model.transcribe(ruta_audio_para_whisper, language='en', verbose=True)
+        print("📝 Transcripción en progreso...")
         transcripcion = resultado['text']
         t_fin_transcripcion = time.time()
         tiempos['transcripcion'] = t_fin_transcripcion - t_inicio_transcripcion
@@ -81,25 +82,38 @@ def transcribir_archivo_local(ruta_archivo: str):
 if __name__ == "__main__":
     
     # --- IMPORTANTE: CAMBIA ESTA LÍNEA POR LA RUTA DE TU ARCHIVO ---
-    # Puede ser un video o un archivo de audio MP3
     ruta_del_archivo_a_transcribir = "mi_video_o_audio.mp4" 
     
-    # Llamamos a la función con el archivo
-    texto_transcrito, tiempos_proceso = transcribir_archivo_local(ruta_del_archivo_a_transcribir)
+    # La función devuelve el resultado completo y los tiempos
+    resultado_completo, tiempos_proceso = transcribir_archivo_local(ruta_del_archivo_a_transcribir)
 
-    if texto_transcrito and not texto_transcrito.startswith("Error:"):
-        print("\n--- 📝 TRANSCRIPCIÓN ---")
-        print(texto_transcrito)
+    # Verificamos que obtuvimos un resultado válido
+    if resultado_completo and 'segments' in resultado_completo:
+        print("\n--- 📝 TRANSCRIPCIÓN FINAL CON TIEMPOS ---")
         
-        # --- Lógica para el nombre de archivo dinámico ---
+        # Lógica para el nombre de archivo dinámico
         nombre_base_input = os.path.splitext(os.path.basename(ruta_del_archivo_a_transcribir))[0]
         nombre_archivo_salida = f"transcripción_{nombre_base_input}.txt"
         
+        # Abrimos el archivo para escribir
         with open(nombre_archivo_salida, "w", encoding="utf-8") as f:
-            f.write(texto_transcrito)
+            # Iteramos sobre cada segmento en los resultados
+            for segmento in resultado_completo['segments']:
+                tiempo_inicio = format_timestamp(segmento['start'])
+                tiempo_fin = format_timestamp(segmento['end'])
+                texto = segmento['text']
+                
+                # Creamos la línea con el formato deseado
+                linea = f"[{tiempo_inicio} --> {tiempo_fin}] {texto.strip()}"
+                
+                # Imprimimos la línea en la consola
+                print(linea)
+                # Y la escribimos en el archivo de texto
+                f.write(linea + "\n")
+
         print(f"\n💾 Transcripción guardada en el archivo: {nombre_archivo_salida}")
 
-        # Mostramos el resumen de tiempos
+        # Mostramos el resumen de tiempos de procesamiento
         if tiempos_proceso:
             tiempo_total = sum(tiempos_proceso.values())
             print("\n--- ⏱️ TIEMPOS DE PROCESAMIENTO ---")
@@ -111,5 +125,5 @@ if __name__ == "__main__":
             print(f"Tiempo Total: {tiempo_total:.2f} segundos.")
 
     else:
-        # Imprime el mensaje de error si algo falló
-        print(f"\n{texto_transcrito}")
+        # Manejo de errores o si no se pudo generar la transcripción
+        print("\nNo se pudo generar una transcripción válida.")
